@@ -1,14 +1,27 @@
-# Install libzmq and cppzmq by following the first 2 instructions at 
-# https://github.com/zeromq/cppzmq#build-instructions
+#!/bin/sh
+#==============================================================================
+# Title: install_zmq_dependencies.sh
+# Description: Install ZeroMQ dependencies for OpenFace in the experimental-hub. 
+# Will install libzmq and cppzmq by following the first 2 instructions at 
+# https://github.com/zeromq/cppzmq#build-instructions, 
+# only use if you do not have the dependencies already installed for ZeroMQ.
+# Author: Aykut Aykut <aykutaaykut.ai@gmail.com>
+# Date: 20231116
+# Usage: sh install_zmq_dependencies.sh
+#==============================================================================
+
+# Exit script if any command fails
+set -e 
+set -o pipefail
 
 ZMQ_DIR="./zmq_dependencies"
 
 mkdir "$ZMQ_DIR"
 cd "$ZMQ_DIR"
 
-####################################################################################################
+#==============================================================================
 # Install libzmq
-####################################################################################################
+#==============================================================================
 LIBZMQ_DIR="./libzmq-master"
 
 if ! [ -d "$LIBZMQ_DIR" ]
@@ -36,7 +49,7 @@ fi
 
 if [ -d "build" ]
 then
-  rm build
+  rm -rf build
 fi
 
 mkdir build
@@ -58,9 +71,9 @@ fi
 
 cd ../../
 
-####################################################################################################
+#==============================================================================
 # Install cppzmq
-####################################################################################################
+#==============================================================================
 CPPZMQ_DIR="./cppzmq-master"
 
 if ! [ -d "$CPPZMQ_DIR" ]
@@ -88,7 +101,7 @@ fi
 
 if [ -d "build" ]
 then
-  rm build
+  rm -rf build
 fi
 
 mkdir build
