@@ -1,5 +1,8 @@
 cmake_minimum_required (VERSION 3.8)
 set(CMAKE_CXX_STANDARD 17)
+# In local, cmake could not find the boost package so should add /local/Cellar to the cmake boost or set it hardcoded like below
+# set(CMAKE_OSX_ARCHITECTURES "x86_64")
+# set(BOOST_ROOT "/usr/local/Cellar/boost/1.83.0")
 
 project(OpenFace VERSION 2.0.2)
 
@@ -39,7 +42,7 @@ else()
     MESSAGE(FATAL_ERROR "OpenCV not found in the system.")
 endif()
 
-find_package( Boost 1.5.9 COMPONENTS filesystem system)
+find_package(Boost 1.5.9 COMPONENTS filesystem system)
 if(${Boost_FOUND})
 	MESSAGE("Boost information:") 
 	MESSAGE("  Boost_VERSION: ${Boost_VERSION}")
