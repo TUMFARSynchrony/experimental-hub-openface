@@ -105,3 +105,6 @@ lib/local/CppInerop/Debug/
 
 # IDE-generated folders
 .idea
+
+# zmq dependencies
+/zmq_dependencies
