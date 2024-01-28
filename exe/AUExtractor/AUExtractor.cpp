@@ -52,17 +52,11 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <zmq.hpp>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
 
-#include <rabbitmq-c/amqp.h>
-#include <rabbitmq-c/ssl_socket.h>
-#include <rabbitmq-c/export.h>
-#include <rabbitmq-c/framing.h>
-#include <rabbitmq-c/tcp_socket.h>
-
-#include "utils.h"
 #include "base64.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
@@ -239,11 +233,6 @@ int main(int argc, char **argv)
 {
   // Convert arguments to more convenient vector form
   std::vector<std::string> arguments = get_arguments(argc, argv);
-  if (arguments.size() <= 1)
-  {
-    std::cout << "Please add argument for the queue name, e.g. the session ID of the experiment" << std::endl;
-    return -1;
-  }
 
   // Load the models
   LandmarkDetector::FaceModelParameters det_parameters(arguments);
@@ -267,35 +256,13 @@ int main(int argc, char **argv)
 
   std::cout << "Everything loaded" << std::endl;
 
-  // TODO: make this configurable, e.g. read from config file
-  char const *hostname = "localhost";
-  int port = 5672;
-  char const *exchange = "amq.direct";
-  amqp_socket_t *socket = NULL;
-  amqp_connection_state_t conn = amqp_new_connection();
-
-  socket = amqp_tcp_socket_new(conn);
-  if (!socket)
-  {
-    die("Creating TCP socket");
-  }
-
-  die_on_error(amqp_socket_open_noblock(socket, hostname, port, 0),
-               "Opening TCP socket");
-
-  die_on_amqp_error(amqp_login(conn, "/", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN,
-                               "guest", "guest"),
-                    "Logging in");
-  amqp_channel_open(conn, 1);
-  amqp_get_rpc_reply(conn);
-  std::cout << "Opening channel" << std::endl;
-
-  amqp_bytes_t queuename = amqp_cstring_bytes(arguments[1].c_str());
-
-  amqp_basic_qos(conn, 1, 0, 10, 0);
-  amqp_basic_consume(conn, 1, queuename, amqp_empty_bytes, 0, 1, 0,
-                     amqp_empty_table);
-  amqp_get_rpc_reply(conn);
+  // ZMQ preparation
+  zmq::context_t ctx;
+  zmq::socket_t sock(ctx, ZMQ_PAIR);
+  std::string addr{"localhost"};
+  std::string port{argc > 1 ? arguments[1] : "5555"};
+  std::cout << "Connecting socket on " + addr + ":" + port << std::endl;
+  sock.connect("tcp://" + addr + ":" + port);
 
   cv::Rect_<float> roi(0, 0, 0, 0);
   cv::Mat greyScale_image, rgb_image_roi, greyScale_image_roi;
@@ -309,50 +276,16 @@ int main(int argc, char **argv)
 
   while (true)
   {
-    amqp_rpc_reply_t res;
-    amqp_envelope_t envelope;
-    cv::Mat greyScale_image;
-
-    amqp_maybe_release_buffers(conn);
-
-    res = amqp_consume_message(conn, &envelope, NULL, 0);
-
-    if (AMQP_RESPONSE_NORMAL != res.reply_type)
-    {
-      break;
-    }
-
-    printf("Delivery %u, exchange %.*s routingkey %.*s\n",
-           (unsigned)envelope.delivery_tag, (int)envelope.exchange.len,
-           (char *)envelope.exchange.bytes, (int)envelope.routing_key.len,
-           (char *)envelope.routing_key.bytes);
-
-    if (envelope.message.properties._flags & AMQP_BASIC_CONTENT_TYPE_FLAG)
-    {
-      printf("Content-type: %.*s\n",
-             (int)envelope.message.properties.content_type.len,
-             (char *)envelope.message.properties.content_type.bytes);
-    }
-
-    amqp_bytes_t msg = amqp_bytes_malloc_dup(envelope.message.body);
-
-    std::string img_str = std::string(static_cast<char *>(msg.bytes), msg.len);
+    zmq::message_t request;
+    sock.recv(request, zmq::recv_flags::none);
+    std::string rpl = std::string(static_cast<char *>(request.data()), request.size());
 
     gettimeofday(&start_all, NULL);
 
     gettimeofday(&start, NULL);
 
     // decode image
-    std::string dec_jpg;
-    try
-    {
-      dec_jpg = base64_decode(img_str);
-    }
-    catch (const std::exception &e)
-    {
-      printf("Not valid encoded base64 image\n");
-      continue;
-    }
+    std::string dec_jpg = base64_decode(rpl);
     std::vector<uchar> data(dec_jpg.begin(), dec_jpg.end());
     cv::Mat rgb_image = cv::imdecode(cv::Mat(data), 1);
     cv::cvtColor(rgb_image, greyScale_image, cv::COLOR_BGR2GRAY);
@@ -430,20 +363,13 @@ int main(int argc, char **argv)
       }
     }
 
-    amqp_basic_properties_t props;
-    props._flags = AMQP_BASIC_CORRELATION_ID_FLAG;
-    props.correlation_id = envelope.message.properties.correlation_id;
-
-    printf("Reply-to-queue: %s\n", (char *)envelope.message.properties.reply_to.bytes);
-
-    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange), envelope.message.properties.reply_to, 0, 0,
-                                    &props, amqp_cstring_bytes(json.c_str())),
-                 "Publishing");
-
-    printf("Finish publish reply: %s\n", json.c_str());
-
     gettimeofday(&stop_all, NULL);
     printf("[%d] All: %f\n\n", frame_count, (double)((stop_all.tv_sec - start_all.tv_sec) * 1000000 + stop_all.tv_usec - start_all.tv_usec) / 1000000);
+
+    // Send reply back to client
+    zmq::message_t reply(json.length());
+    memcpy(reply.data(), json.c_str(), json.length());
+    sock.send(reply, zmq::send_flags::none);
 
     // Save image for debugging purposes
     // for(int j = 0; j < face_model.detected_landmarks.rows / 2; j++){
@@ -452,20 +378,9 @@ int main(int argc, char **argv)
     // 	cv::circle(rgb_image_roi, cv::Point2f(x,y), 4, cv::Scalar(255, 0, 0), cv::FILLED, cv::LINE_8);
     // }
     // cv::imwrite("../../experimental-hub-openface-test/" + to_string(frame_count) + ".jpg", rgb_image_roi);
-    amqp_bytes_free(msg);
 
-    amqp_destroy_envelope(&envelope);
     frame_count++;
   }
-
-  amqp_bytes_free(queuename);
-
-  amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS);
-  printf("Closing channel\n");
-  amqp_connection_close(conn, AMQP_REPLY_SUCCESS);
-  printf("Closing connection\n");
-  amqp_destroy_connection(conn);
-  printf("Ending connection\n");
 
   return 0;
 }
