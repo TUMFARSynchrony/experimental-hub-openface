@@ -55,13 +55,12 @@
 #include <zmq.hpp>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #include "base64.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
-
-#include <sys/time.h>
+#include <time.h>
+#include "custom_time.h"
 
 #ifndef CONFIG_DIR
 #define CONFIG_DIR "~"
