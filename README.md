@@ -1,3 +1,19 @@
+# This is an adapted fork of OpenFace 2.2.0 for use with the experimental-hub. 
+
+Please see the [wiki](https://github.com/TUMFARSynchrony/experimental-hub-openface/wiki) for more details. 
+
+We have optimized this OpenFace build to work with our real-time synchrony score implementation in the experimental-hub. 
+
+[TODO] add dockerization documentation here. 
+[TODO] add manual build instruction link here. 
+
+
+
+
+
+-----------------------
+
+
 # OpenFace 2.2.0: a facial behavior analysis toolkit
 
 [![Build Status](https://travis-ci.org/TadasBaltrusaitis/OpenFace.svg?branch=master)](https://travis-ci.org/TadasBaltrusaitis/OpenFace)
