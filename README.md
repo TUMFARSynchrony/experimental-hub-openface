@@ -9,7 +9,7 @@ We have optimized this OpenFace build to work with our real-time synchrony score
 
 
 
-
+Below is the original documentation to Openface.
 
 -----------------------
 
